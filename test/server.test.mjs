@@ -231,7 +231,10 @@ test("serves the app, bounds static paths, and reports the local GitHub session"
   assert.deepEqual(session, {
     token: "test-session-token",
     github: { connected: true, login: "tester" },
+    instanceId: session.instanceId,
+    directory: null,
   });
+  assert.match(session.instanceId, /^[a-f\d]{32}$/);
   assert.equal(calls.length, 1);
 });
 

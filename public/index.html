@@ -25,12 +25,29 @@
           <span id="project-name">Untitled site</span
           ><span data-icon="chevron-down"></span>
         </button>
-        <span id="save-status" class="save-status"><i></i> Saved locally</span>
+        <span id="save-status" class="save-status" hidden
+          ><i></i> Saved locally</span
+        >
         <div class="top-actions">
-          <button id="open-button" class="button subtle">
+          <button
+            id="open-button"
+            class="button subtle"
+            aria-label="Open site"
+            title="Open site"
+          >
             <span data-icon="folder"></span><span>Open site</span>
           </button>
           <button
+            aria-label="Save files"
+            id="save-files-button"
+            class="button subtle"
+            hidden
+            title="Save edits to the open directory"
+          >
+            <span data-icon="save"></span><span>Save files</span>
+          </button>
+          <button
+            aria-label="Export ZIP"
             id="download-button"
             class="button subtle"
             title="Download project as ZIP"
@@ -38,12 +55,17 @@
             <span data-icon="download"></span><span>Export</span>
           </button>
           <span class="top-divider"></span>
-          <button id="changes-button" class="button subtle">
+          <button
+            id="changes-button"
+            class="button subtle"
+            aria-label="Review changes"
+            title="Review changes"
+          >
             <span data-icon="git-branch"></span
             ><span id="change-count">No changes</span>
           </button>
           <button id="push-button" class="button primary">
-            <span data-icon="upload"></span> Push to GitHub
+            <span data-icon="upload"></span> Commit &amp; push
           </button>
         </div>
       </header>
@@ -131,11 +153,19 @@
             </div>
           </div>
           <div id="canvas-area" class="canvas-area">
-            <div class="canvas-label">
+            <div class="canvas-label" hidden>
               <span class="canvas-caption">YOUR CANVAS</span
               ><span id="viewport-label">Desktop · responsive</span>
             </div>
-            <div id="canvas-window" class="canvas-window">
+            <div id="empty-workspace" class="empty-workspace">
+              <span data-icon="folder"></span>
+              <h1>Open a site to begin.</h1>
+              <p>Choose a directory or clone a GitHub repository.</p>
+              <button id="empty-open-button" class="button primary">
+                Open site
+              </button>
+            </div>
+            <div id="canvas-window" class="canvas-window" hidden>
               <div class="browser-chrome">
                 <span class="window-dots"><i></i><i></i><i></i></span
                 ><span id="page-path">index.html</span
@@ -161,7 +191,7 @@
                 aria-label="HTML source code"
               ></textarea>
             </div>
-            <div class="canvas-hint">
+            <div class="canvas-hint" hidden>
               <span data-icon="mouse"></span
               ><span>Click to select. Double-click to edit text.</span
               ><span class="hint-separator">/</span><span>Make it yours.</span>
@@ -339,7 +369,5 @@
     </div>
     <dialog id="modal"><div id="modal-content"></div></dialog>
     <div id="toast" class="toast" role="status" hidden></div>
-    <input id="folder-input" type="file" webkitdirectory multiple hidden />
-    <input id="html-input" type="file" accept=".html,.htm" hidden />
   </body>
 </html>

@@ -1,7 +1,16 @@
+import {
+  createNativeProjects,
+  NativeProjectError,
+} from "./native-projects.mjs";
 import http from "node:http";
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import { execFile } from "node:child_process";
-import { readFile, realpath, stat } from "node:fs/promises";
+import { readFile, realpath, stat, readdir } from "node:fs/promises";
+import os from "node:os";
+import {
+  createLocalWorkspaces,
+  LocalWorkspaceError,
+} from "./local-workspace.mjs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -493,12 +502,66 @@ function sameToken(actual, expected) {
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
+function expandLocalPath(value) {
+  if (typeof value !== "string") return value;
+  return value === "~"
+    ? os.homedir()
+    : value.startsWith("~/")
+      ? path.join(os.homedir(), value.slice(2))
+      : value;
+}
+async function browseDirectories(input) {
+  const selected = expandLocalPath(input.directory || os.homedir());
+  if (
+    typeof selected !== "string" ||
+    !path.isAbsolute(selected) ||
+    selected.includes("\0")
+  )
+    fail(400, "Enter an absolute directory path.");
+  let directory, entries;
+  try {
+    directory = await realpath(selected);
+    if (!(await stat(directory)).isDirectory())
+      fail(400, "Choose a directory.");
+    entries = await readdir(directory, { withFileTypes: true });
+  } catch (error) {
+    if (error instanceof AppError) throw error;
+    fail(
+      400,
+      "That directory could not be opened. Check its path and permissions.",
+    );
+  }
+  return {
+    directory,
+    parent: path.dirname(directory),
+    folders: entries
+      .filter(
+        (entry) =>
+          entry.isDirectory() &&
+          !entry.isSymbolicLink() &&
+          !entry.name.startsWith(".") &&
+          entry.name !== "node_modules",
+      )
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .slice(0, 1000)
+      .map((entry) => ({
+        name: entry.name,
+        directory: path.join(directory, entry.name),
+      })),
+  };
+}
+
 /** Create an unbound server. Tests can inject a fake gh runner; production uses gh. */
 export function createApp({
   runGh: run = runGh,
   token = randomBytes(32).toString("hex"),
   publicDir = path.join(ROOT, "public"),
+  localWorkspaces = createLocalWorkspaces(),
+  nativeProjects = createNativeProjects(),
+  startupDirectory = null,
+  browseLocal = browseDirectories,
 } = {}) {
+  const instanceId = randomBytes(16).toString("hex");
   const api = createGithub(run);
   const server = http.createServer(async (request, response) => {
     response.setHeader("X-Content-Type-Options", "nosniff");
@@ -523,6 +586,12 @@ export function createApp({
       )
         fail(403, "Cross-site requests are not allowed.");
       if (request.method === "GET" && url.pathname === "/api/session") {
+        if (url.searchParams.get("local") === "1")
+          return json(response, 200, {
+            token,
+            instanceId,
+            directory: startupDirectory,
+          });
         let github;
         try {
           const user = await api("user");
@@ -541,7 +610,12 @@ export function createApp({
                 : "Run gh auth login to connect GitHub.",
           };
         }
-        return json(response, 200, { token, github });
+        return json(response, 200, {
+          token,
+          github,
+          instanceId,
+          directory: startupDirectory,
+        });
       }
       if (url.pathname.startsWith("/api/")) {
         if (request.method !== "POST")
@@ -555,6 +629,43 @@ export function createApp({
             "The local session expired. Refresh Pagecraft and try again.",
           );
         const input = await readJson(request);
+        if (url.pathname === "/api/local/pick") {
+          const picked = await nativeProjects.pickDirectory();
+          return json(
+            response,
+            200,
+            picked.cancelled
+              ? picked
+              : await localWorkspaces.open({ directory: picked.directory }),
+          );
+        }
+        if (url.pathname === "/api/local/clone") {
+          const cloned = await nativeProjects.cloneRepository(input);
+          const opened = await localWorkspaces.open({
+            directory: cloned.siteDirectory
+              ? path.join(cloned.directory, cloned.siteDirectory)
+              : cloned.directory,
+          });
+          return json(response, 200, {
+            ...opened,
+            clonedRepository: cloned.repository,
+          });
+        }
+        if (url.pathname === "/api/local/browse")
+          return json(response, 200, await browseLocal(input));
+        if (url.pathname === "/api/local/open")
+          return json(
+            response,
+            200,
+            await localWorkspaces.open({
+              ...input,
+              directory: expandLocalPath(input.directory),
+            }),
+          );
+        if (url.pathname === "/api/local/save")
+          return json(response, 200, await localWorkspaces.save(input));
+        if (url.pathname === "/api/local/push")
+          return json(response, 200, await localWorkspaces.push(input));
         if (url.pathname === "/api/github/open")
           return json(response, 200, await openRepository(api, input));
         if (url.pathname === "/api/github/push")
@@ -594,18 +705,29 @@ export function createApp({
       response.end(request.method === "HEAD" ? undefined : bytes);
     } catch (error) {
       const status =
-        error instanceof AppError
+        error instanceof AppError ||
+        error instanceof LocalWorkspaceError ||
+        error instanceof NativeProjectError
           ? error.status
           : error.code === "ENOENT" || error.code === "ENOTDIR"
             ? 404
             : 500;
       const message =
-        error instanceof AppError
+        error instanceof AppError ||
+        error instanceof LocalWorkspaceError ||
+        error instanceof NativeProjectError
           ? error.message
           : status === 404
             ? "File not found."
             : "The local server could not complete the request.";
-      if (!response.headersSent) json(response, status, { error: message });
+      if (!response.headersSent)
+        json(response, status, {
+          error: message,
+          ...(error instanceof LocalWorkspaceError &&
+          SHA.test(error.pendingCommit || "")
+            ? { pendingCommit: error.pendingCommit }
+            : {}),
+        });
       else response.end();
     }
   });
@@ -621,7 +743,21 @@ if (
   const port = Number(process.env.PORT || 4173);
   if (!Number.isInteger(port) || port < 1 || port > 65535)
     throw new Error("PORT must be an integer between 1 and 65535.");
-  const server = createApp();
+  const args = process.argv.slice(2);
+  const directoryArg = args[0] === "--directory" ? args[1] : args[0];
+  if (
+    args.length > (args[0] === "--directory" ? 2 : 1) ||
+    (args[0] === "--directory" && !directoryArg) ||
+    directoryArg?.startsWith("-")
+  )
+    throw new Error(
+      "Usage: npm start -- [--directory] /path/to/site-or-repository",
+    );
+  const server = createApp({
+    startupDirectory: directoryArg
+      ? path.resolve(expandLocalPath(directoryArg))
+      : null,
+  });
   server.on("error", (error) => {
     console.error(
       error.code === "EADDRINUSE"

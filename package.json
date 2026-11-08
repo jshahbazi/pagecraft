@@ -11,7 +11,7 @@
     "start": "node server.mjs",
     "dev": "node --watch server.mjs",
     "test": "node --test test/*.test.mjs",
-    "check": "node --check server.mjs && node --check public/app.js && node --check public/editor.js && node --check public/files.js"
+    "check": "node --check server.mjs && node --check local-workspace.mjs && node --check native-projects.mjs && node --check public/workspace-state.js && node --check public/api-client.js && node --check public/app.js && node --check public/editor.js && node --check public/files.js"
   },
   "license": "MIT"
 }

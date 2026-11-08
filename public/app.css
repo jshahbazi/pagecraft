@@ -1321,3 +1321,135 @@ dialog::backdrop {
     transition: none !important;
   }
 }
+
+#directory-browser {
+  margin-top: 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px;
+  max-height: 240px;
+  overflow: auto;
+  background: #fffefb;
+}
+.directory-location {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 4px 9px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 5px;
+}
+.directory-location > span {
+  font:
+    10px ui-monospace,
+    monospace;
+  color: #8d8477;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.directory-entry {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  border-radius: 4px;
+  padding: 9px;
+  color: #736785;
+  font-size: 11px;
+}
+.directory-entry:hover {
+  background: #f2edf9;
+}
+#footer-message {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.workspace-footer > div {
+  min-width: 0;
+}
+.topbar .save-status {
+  max-width: 145px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.modal-tabs {
+  flex-wrap: wrap;
+}
+
+.empty-workspace {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  text-align: center;
+  padding: 40px 20px;
+  color: #9a9489;
+}
+.empty-workspace > .icon {
+  width: 40px;
+  height: 40px;
+  color: #a394bd;
+  margin-bottom: 18px;
+  stroke-width: 1;
+}
+.empty-workspace h1 {
+  font-size: 24px;
+  letter-spacing: -0.7px;
+  font-weight: 500;
+  color: #5b555e;
+  margin: 0 0 12px;
+}
+.empty-workspace p {
+  font-size: 12px;
+  line-height: 1.7;
+  margin: 0 0 22px;
+}
+.directory-pick-button {
+  width: 100%;
+  padding: 18px;
+  font-size: 13px;
+}
+.directory-pick-button .icon {
+  width: 20px;
+  height: 20px;
+}
+.open-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 24px 0;
+  color: #a3998b;
+  font-size: 10px;
+}
+.open-divider:before,
+.open-divider:after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+.clone-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.clone-row input {
+  margin: 0;
+  min-width: 0;
+}
+.clone-row .button {
+  padding: 11px 13px;
+}
+#clone-repository-input {
+  margin-top: 0;
+}
+.modal-body:has(#clone-repository-input) > label {
+  margin-bottom: 8px;
+}

@@ -336,7 +336,8 @@ export class Editor {
       return;
     const data = event.data;
     if (data.action === "ready") {
-      if (this.selectedId) this.send({ action: "select", id: this.selectedId });
+      if (this.selectedId)
+        this.send({ action: "select", id: this.selectedId, scroll: false });
       this.onReady();
     } else if (data.action === "select" && this.nodes.has(data.id)) {
       this.selectedId = data.id;
@@ -361,8 +362,10 @@ export class Editor {
         return;
       const holder = this.document.createElement("template");
       holder.innerHTML = data.html;
+      const reconciledIds = new Set();
       for (const element of holder.content.querySelectorAll("*")) {
-        const original = this.nodes.get(element.getAttribute(NODE));
+        const incomingId = element.getAttribute(NODE);
+        const original = this.nodes.get(incomingId);
         if (original) {
           // Restore every authored attribute (including script handlers, which
           // remain inert in the source model). Preview URLs and flags are never
@@ -374,6 +377,15 @@ export class Editor {
           for (const attr of original.attributes)
             element.setAttribute(attr.name, attr.value);
         } else {
+          // The bridge assigns session-scoped IDs to new rich-text nodes.
+          // Keep those identities in the source model without exporting the
+          // instrumentation, so new Enter-created lines can be selected later.
+          if (
+            typeof incomingId === "string" &&
+            new RegExp(`^live-${this.channel}-[1-9]\\d{0,8}$`).test(incomingId) &&
+            !reconciledIds.has(incomingId)
+          )
+            this.ids.set(element, incomingId);
           for (const attr of [...element.attributes]) {
             if (
               attr.name.startsWith("data-pagecraft-") ||
@@ -383,6 +395,7 @@ export class Editor {
               element.removeAttribute(attr.name);
           }
         }
+        if (incomingId) reconciledIds.add(incomingId);
         if (
           /^(SCRIPT|STYLE|IFRAME|OBJECT|EMBED|BASE|META|LINK|FORM)$/.test(
             element.tagName,
@@ -397,17 +410,14 @@ export class Editor {
       this.onChange(this.getHtml());
       this.computedStyles.set(data.id, data.styles || {});
       this.onSelect(this.selection());
-      // Keep the live editing caret in place; refresh only the node lookup ids.
-      // Newly inserted rich text is reconciled when editing ends.
+      // Keep the live DOM and caret in place. Its IDs already match the source
+      // model, including newly inserted rich text; no iframe reload is needed.
     } else if (
       data.action === "editing-end" &&
       data.id === this.activeEditingId
     ) {
       this.activeEditingId = null;
-      // Direct switches within the iframe keep its current channel alive so
-      // the next select/start/input messages cannot be discarded by a reload.
-      if (data.refresh !== false) this.render();
-    } else if (data.action === "delete") this.deleteSelected();
+    }
   }
 
   editable(element) {
@@ -580,6 +590,7 @@ function bridge(channel, styleNames) {
   const editingAttr = "data-pagecraft-editing";
   let selected = null;
   let editing = null;
+  let liveCounter = 0;
   const post = (action, data = {}) =>
     parent.postMessage({ pagecraft: channel, action, ...data }, "*");
   const styles = (element) => {
@@ -597,13 +608,13 @@ function bridge(channel, styleNames) {
         styles: styles(element),
       });
   };
-  const endEditing = (refresh = true) => {
+  const endEditing = () => {
     if (!editing) return;
     const element = editing;
     editing = null;
     element.removeAttribute("contenteditable");
     element.removeAttribute(editingAttr);
-    post("editing-end", { id: element.getAttribute(nodeAttr), refresh });
+    post("editing-end", { id: element.getAttribute(nodeAttr) });
   };
   document.addEventListener(
     "click",
@@ -613,7 +624,7 @@ function bridge(channel, styleNames) {
       // as well as selection, including clicks on their nested inline nodes.
       if (event.target.closest?.("a,area")) event.preventDefault();
       if (editing && editing.contains(event.target)) return;
-      if (editing) endEditing(false);
+      if (editing) endEditing();
       event.preventDefault();
       event.stopPropagation();
       const element = event.target.closest?.(`[${nodeAttr}]`);
@@ -628,7 +639,7 @@ function bridge(channel, styleNames) {
       if (!link) return;
       event.preventDefault();
       event.stopPropagation();
-      if (editing && !editing.contains(link)) endEditing(false);
+      if (editing && !editing.contains(link)) endEditing();
       select(link);
     },
     true,
@@ -649,7 +660,7 @@ function bridge(channel, styleNames) {
         )
       )
         return;
-      if (editing && editing !== element) endEditing(false);
+      if (editing && editing !== element) endEditing();
       select(element);
       editing = element;
       post("editing-start", { id: element.getAttribute(nodeAttr) });
@@ -665,12 +676,29 @@ function bridge(channel, styleNames) {
     true,
   );
   document.addEventListener("input", (event) => {
-    if (editing && editing.contains(event.target))
+    if (editing && editing.contains(event.target)) {
+      // Browser editing may insert or clone elements when Enter splits a line.
+      // Assign identities before sending markup, including replacing duplicate
+      // IDs copied from the editing root or another live descendant.
+      const seen = new Set(
+        [...document.querySelectorAll(`[${nodeAttr}]`)]
+          .filter((element) => element === editing || !editing.contains(element))
+          .map((element) => element.getAttribute(nodeAttr)),
+      );
+      for (const element of editing.querySelectorAll("*")) {
+        let id = element.getAttribute(nodeAttr);
+        if (!id || seen.has(id)) {
+          id = `live-${channel}-${++liveCounter}`;
+          element.setAttribute(nodeAttr, id);
+        }
+        seen.add(id);
+      }
       post("change", {
         id: editing.getAttribute(nodeAttr),
         html: editing.innerHTML,
         styles: styles(editing),
       });
+    }
   });
   document.addEventListener("paste", (event) => {
     if (!editing) return;
@@ -706,8 +734,9 @@ function bridge(channel, styleNames) {
         !editing &&
         (event.key === "Delete" || event.key === "Backspace")
       ) {
+        // Deleting an element is an explicit inspector action. A lost text
+        // caret must never turn a character deletion into a section deletion.
         event.preventDefault();
-        post("delete");
       }
     },
     true,
@@ -719,7 +748,8 @@ function bridge(channel, styleNames) {
         (node) => node.getAttribute(nodeAttr) === event.data.id,
       );
       select(element);
-      element?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      if (event.data.scroll !== false)
+        element?.scrollIntoView({ block: "nearest", behavior: "smooth" });
     }
   });
   post("ready");
