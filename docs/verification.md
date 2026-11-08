@@ -4,7 +4,7 @@ Verified on 2026-11-08 with Node.js 24.15.0 on macOS, Chrome, and the in-app bro
 
 ## Automated checks
 
-`npm run check`, `npm test`, and `git diff --check` pass. The 79 Node tests cover:
+`npm run check`, `npm test`, and `git diff --check` pass. The 81 Node tests cover:
 
 - Local host, origin, token, request-size, and static file boundaries.
 - Directory reads, source-folder detection, relative paths, symbolic links, file counts, and byte limits.
@@ -35,6 +35,18 @@ GitHub API tests use an injected transport. OS dialog command tests use an injec
 - Verified ZIP export with Python's independent zipfile reader: entries and CRCs passed.
 
 The editor pauses authored scripts and event handlers while preserving their source. These checks do not verify a site's interactive runtime or deployment. Stark and Planetable publication still uses their separate Sites workflow.
+
+## Deletion and inline editing recheck
+
+After restoring Backspace/Delete shortcuts, an independent review found that canvas keyboard Undo was not forwarded to the app. The editor now forwards Cmd/Ctrl+Z and Redo shortcuts outside inline editing, while keeping native text undo during inline editing.
+
+Chrome end-to-end checks on an isolated local fixture passed:
+
+- Backspace removed a section; toolbar Undo restored its heading, paragraph, and nested strong element.
+- Delete removed that section; Cmd+Z from the canvas restored the complete section.
+- Inline typing and Backspace changed characters normally. On blur the iframe srcdoc stayed unchanged and scrollTop stayed at 1824.
+
+The QA shell used an integer label line height to avoid the browser automation tool's fractional iframe-coordinate restriction. Production editor and history code were unchanged by that layout workaround. No user site files were saved during these checks.
 
 ## Recovery limits
 

@@ -161,6 +161,12 @@ function editorHarness(root, channel = "test") {
     ids: new WeakMap([[root, "n1"]]),
     computedStyles: new Map(),
     onReady() {},
+    onUndo() {
+      this.undoCalls = (this.undoCalls || 0) + 1;
+    },
+    onRedo() {
+      this.redoCalls = (this.redoCalls || 0) + 1;
+    },
     onSelect(selection) {
       this.lastSelection = selection;
     },
@@ -216,6 +222,47 @@ test("Backspace and Delete preserve native character deletion during text editin
     assert.equal(keyEvent.defaultPrevented, false, `${key} retains native text behavior`);
   }
   assert.equal(harness.messages.some((message) => message.action === "delete"), false);
+});
+
+test("canvas undo and redo shortcuts reach the parent callbacks", () => {
+  const root = new Element("section", { [NODE]: "n1" }, "Selected content");
+  const bridge = bridgeHarness(root);
+  const parent = editorHarness(root);
+  bridge.dispatch("click", event(root));
+  const shortcuts = [
+    { key: "z", metaKey: true, action: "undo" },
+    { key: "z", ctrlKey: true, action: "undo" },
+    { key: "Z", metaKey: true, shiftKey: true, action: "redo" },
+    { key: "z", ctrlKey: true, shiftKey: true, action: "redo" },
+    { key: "y", ctrlKey: true, action: "redo" },
+  ];
+  for (const shortcut of shortcuts) {
+    const keyEvent = Object.assign(event(root, shortcut.key), shortcut);
+    bridge.dispatch("keydown", keyEvent);
+    assert.equal(keyEvent.defaultPrevented, true);
+    assert.equal(bridge.messages.at(-1).action, shortcut.action);
+    parent.receive(bridge.messages.at(-1));
+  }
+  assert.equal(parent.editor.undoCalls, 2);
+  assert.equal(parent.editor.redoCalls, 3);
+});
+
+test("undo and redo stay native while editing inline text", () => {
+  const root = new Element("p", { [NODE]: "n1" }, "Editable text");
+  const bridge = bridgeHarness(root);
+  bridge.dispatch("dblclick", event(root));
+  const messageCount = bridge.messages.length;
+  for (const shortcut of [
+    { key: "z", metaKey: true },
+    { key: "z", ctrlKey: true },
+    { key: "Z", metaKey: true, shiftKey: true },
+    { key: "y", ctrlKey: true },
+  ]) {
+    const keyEvent = Object.assign(event(root, shortcut.key), shortcut);
+    bridge.dispatch("keydown", keyEvent);
+    assert.equal(keyEvent.defaultPrevented, false);
+  }
+  assert.equal(bridge.messages.length, messageCount, "native text history does not dispatch app history commands");
 });
 
 test("finishing an inline edit keeps the live iframe and its scroll position", () => {

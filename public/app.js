@@ -82,6 +82,8 @@ const editor = new Editor({
   onChange: (html) => recordChange(project.current, html),
   onSelect: showSelection,
   onReady: renderOutline,
+  onUndo: undo,
+  onRedo: redo,
 });
 
 function toast(message, error = false) {

@@ -112,11 +112,15 @@ export class Editor {
     onSelect = () => {},
     onChange = () => {},
     onReady = () => {},
+    onUndo = () => {},
+    onRedo = () => {},
   }) {
     this.iframe = iframe;
     this.onSelect = onSelect;
     this.onChange = onChange;
     this.onReady = onReady;
+    this.onUndo = onUndo;
+    this.onRedo = onRedo;
     this.selectedId = null;
     this.activeEditingId = null;
     this.nodes = new Map();
@@ -419,6 +423,10 @@ export class Editor {
       this.activeEditingId = null;
     } else if (data.action === "delete") {
       this.deleteSelected();
+    } else if (data.action === "undo") {
+      this.onUndo();
+    } else if (data.action === "redo") {
+      this.onRedo();
     }
   }
 
@@ -725,7 +733,17 @@ function bridge(channel, styleNames) {
     "keydown",
     (event) => {
       const link = event.target.closest?.("a,area");
-      if (!editing && event.key === "Enter" && link) {
+      const key = event.key.toLowerCase();
+      if (
+        !editing &&
+        (event.metaKey || event.ctrlKey) &&
+        !event.altKey &&
+        (key === "z" || key === "y")
+      ) {
+        event.preventDefault();
+        event.stopPropagation();
+        post(key === "y" || event.shiftKey ? "redo" : "undo");
+      } else if (!editing && event.key === "Enter" && link) {
         event.preventDefault();
         event.stopPropagation();
         select(link);
