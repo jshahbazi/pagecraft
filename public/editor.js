@@ -417,6 +417,8 @@ export class Editor {
       data.id === this.activeEditingId
     ) {
       this.activeEditingId = null;
+    } else if (data.action === "delete") {
+      this.deleteSelected();
     }
   }
 
@@ -734,9 +736,8 @@ function bridge(channel, styleNames) {
         !editing &&
         (event.key === "Delete" || event.key === "Backspace")
       ) {
-        // Deleting an element is an explicit inspector action. A lost text
-        // caret must never turn a character deletion into a section deletion.
         event.preventDefault();
+        if (selected) post("delete");
       }
     },
     true,

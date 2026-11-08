@@ -184,7 +184,7 @@ function editorHarness(root, channel = "test") {
   };
 }
 
-test("Backspace and Delete never delete selected paragraphs or sections", () => {
+test("Backspace and Delete delete selected elements outside inline editing", () => {
   for (const tag of ["p", "section"]) {
     const root = new Element(tag, { [NODE]: "n1" }, "Keep this content");
     const harness = bridgeHarness(root);
@@ -192,16 +192,16 @@ test("Backspace and Delete never delete selected paragraphs or sections", () => 
     for (const key of ["Backspace", "Delete"]) {
       const keyEvent = event(root, key);
       harness.dispatch("keydown", keyEvent);
-      assert.equal(keyEvent.defaultPrevented, true, `${tag}: ${key} is inert outside text editing`);
+      assert.equal(keyEvent.defaultPrevented, true, `${tag}: ${key} handles element deletion outside text editing`);
     }
-    assert.equal(harness.messages.some((message) => message.action === "delete"), false);
+    assert.equal(harness.messages.filter((message) => message.action === "delete").length, 2);
     assert.equal(root.textContent, "Keep this content");
 
     const receiver = editorHarness(root);
     let deletions = 0;
     receiver.editor.deleteSelected = () => deletions++;
     receiver.receive({ action: "delete" });
-    assert.equal(deletions, 0, "the parent does not accept a keyboard deletion message");
+    assert.equal(deletions, 1, "the parent deletes the selected element");
   }
 });
 

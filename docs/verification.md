@@ -15,7 +15,7 @@ Verified on 2026-11-08 with Node.js 24.15.0 on macOS, Chrome, and the in-app bro
 - One bounded retry for an explicitly expired token, including safe grant reattachment before a write.
 - Native OS picker commands, cancellation, concurrency, and errors using injected command runners.
 - GitHub identifier validation, unique clone directories, sparse checkout, and Git upstream preservation. A real temporary Git clone checks sparse contents and upstream metadata.
-- Production editor behavior: no keyboard element deletion, native text deletion, no iframe reload on blur, stable IDs for new inline nodes, and selection restoration without scrolling.
+- Production editor behavior: selected-element keyboard deletion outside inline editing, native text deletion, no iframe reload on blur, stable IDs for new inline nodes, and selection restoration without scrolling.
 - ZIP contents and CRC/directory output, plus the retained GitHub API adapter.
 
 GitHub API tests use an injected transport. OS dialog command tests use an injected runner. Git commit/push tests use actual temporary local repositories.
@@ -27,7 +27,7 @@ GitHub API tests use an injected transport. OS dialog command tests use an injec
 - Sent a native macOS picker request; cancellation returned cleanly to the dialog. Choosing a folder through that native window was not fully automated. The underlying directory open/save flow was tested separately.
 - Used Clone and open with jshahbazi/stark. The live GitHub clone selected website/public, retained origin/main, and omitted unrelated files through sparse checkout. Its stylesheet and images rendered. The checkout remained clean after browser edits were undone; no push to Stark was performed.
 - Edited the cloned site's footer heading inline and pressed Backspace: it removed one character. Leaving the field kept the exact iframe srcdoc attribute and scrollTop at 4151; there was no reload or top-to-bottom scroll.
-- Clicked a noneditable heading and pressed Backspace and Delete. The heading, enclosing section, and all 197 layer entries remained present.
+- Keyboard element deletion was restored at the user’s request. Production-source tests verify that Backspace/Delete remove the selected element outside inline editing and retain native character deletion during inline editing. The earlier browser check for inert deletion keys no longer describes the intended behavior.
 - Opened actual Stark and Planetable checkout roots read-only through the directory service. They selected website/public and website/dist respectively, with their correct owning Git roots, branches, and upstreams. No files were saved or pushed in either original project.
 - In a temporary existing checkout, confirmed that browser editing alone did not change the file. Save files changed the original HTML in place. A reviewed Commit & push changed only index.html; an unrelated dirty file remained uncommitted, and local HEAD matched the bare remote.
 - Changed that temporary file from a second editor. Pagecraft refused to overwrite it and retained the browser draft.
