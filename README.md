@@ -2,6 +2,8 @@
 
 A local WYSIWYG HTML editor for the websites you make with ChatGPT. Click the page to select an element, double-click to edit text, adjust its design, and push a reviewed commit to GitHub.
 
+![Pagecraft visual editor](docs/preview.jpg)
+
 Pagecraft runs on your computer. It has no npm dependencies and uses your existing GitHub CLI login for repository access.
 
 ## Run

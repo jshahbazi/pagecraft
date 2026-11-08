@@ -185,12 +185,17 @@ function showSelection(value) {
   $("#src-field").hidden = value.tag !== "img";
   $("#alt-field").hidden = value.tag !== "img";
   set("font-size", parseFloat(value.styles.fontSize) || "");
-  set(
-    "font-weight",
-    ["300", "400", "500", "600", "700", "800"].includes(value.styles.fontWeight)
-      ? value.styles.fontWeight
-      : "400",
-  );
+  const weightSelect = $("#font-weight");
+  weightSelect.querySelector("[data-current]")?.remove();
+  const currentWeight = value.styles.fontWeight || "400";
+  if (
+    ![...weightSelect.options].some((option) => option.value === currentWeight)
+  ) {
+    const option = new Option(`${currentWeight} (current)`, currentWeight);
+    option.dataset.current = "true";
+    weightSelect.add(option);
+  }
+  set("font-weight", currentWeight);
   set(
     "font-family",
     [...$("#font-family").options].some(

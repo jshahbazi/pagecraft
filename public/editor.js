@@ -608,12 +608,28 @@ function bridge(channel, styleNames) {
   document.addEventListener(
     "click",
     (event) => {
+      // srcdoc inherits the parent's base URL, so even a fragment href can
+      // navigate away from this document. Keep links inert during text edits
+      // as well as selection, including clicks on their nested inline nodes.
+      if (event.target.closest?.("a,area")) event.preventDefault();
       if (editing && editing.contains(event.target)) return;
       if (editing) endEditing(false);
       event.preventDefault();
       event.stopPropagation();
       const element = event.target.closest?.(`[${nodeAttr}]`);
       select(element);
+    },
+    true,
+  );
+  document.addEventListener(
+    "auxclick",
+    (event) => {
+      const link = event.target.closest?.("a,area");
+      if (!link) return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (editing && !editing.contains(link)) endEditing(false);
+      select(link);
     },
     true,
   );
@@ -678,7 +694,12 @@ function bridge(channel, styleNames) {
   document.addEventListener(
     "keydown",
     (event) => {
-      if (event.key === "Escape" && editing) {
+      const link = event.target.closest?.("a,area");
+      if (!editing && event.key === "Enter" && link) {
+        event.preventDefault();
+        event.stopPropagation();
+        select(link);
+      } else if (event.key === "Escape" && editing) {
         event.preventDefault();
         endEditing();
       } else if (

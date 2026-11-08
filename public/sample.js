@@ -13,7 +13,7 @@ const html = `<!DOCTYPE html>
   <header class="site-header"><a class="logo" href="#">forma.</a><nav class="site-nav"><a href="#collection">Collection</a><a href="#story">Our story</a><a href="mailto:hello@example.com">Say hello ↗</a></nav></header>
   <main>
     <section class="hero" id="collection">
-      <div class="hero-copy"><p class="eyebrow">LESS, BUT BETTER.</p><h1>Good things.<br>Made <em>slowly.</em></h1><p class="description">Thoughtful objects for everyday living. Made with care, meant to stay.</p><a class="cta" href="#story">Explore the collection <span>↗</span></a></div>
+      <div class="hero-copy"><p class="eyebrow">LESS, BUT BETTER.</p><h1>Good things.<br>Made <em>slowly.</em></h1><p class="description">Thoughtful objects for everyday living. Made with care. Built to stay.</p><a class="cta" href="#story">Explore the collection <span>↗</span></a></div>
       <div class="hero-image"><img src="assets/studio.svg" alt="A terracotta lounge chair beside a floor lamp in a warm, sunlit room"><span class="image-label">A LITTLE SPACE TO SLOW DOWN.</span></div>
     </section>
     <section class="values"><span class="value">SMALL BATCHES</span><span class="value">NATURAL MATERIALS</span><span class="value">MADE TO LAST</span></section>
