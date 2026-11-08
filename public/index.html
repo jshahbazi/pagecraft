@@ -1,0 +1,345 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f7f6f2" />
+    <meta
+      name="description"
+      content="Make your AI-made website your own. A local visual HTML editor with GitHub publishing."
+    />
+    <title>Pagecraft — Make it yours.</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/app.css" />
+    <script type="module" src="/app.js"></script>
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <a class="brand" href="/" aria-label="Pagecraft home"
+          ><span class="brand-symbol">p<span>c</span></span
+          ><span>pagecraft<span class="brand-dot">.</span></span></a
+        >
+        <span class="top-divider"></span>
+        <button id="project-button" class="project-button" title="Open project">
+          <span id="project-name">Untitled site</span
+          ><span data-icon="chevron-down"></span>
+        </button>
+        <span id="save-status" class="save-status"><i></i> Saved locally</span>
+        <div class="top-actions">
+          <button id="open-button" class="button subtle">
+            <span data-icon="folder"></span><span>Open site</span>
+          </button>
+          <button
+            id="download-button"
+            class="button subtle"
+            title="Download project as ZIP"
+          >
+            <span data-icon="download"></span><span>Export</span>
+          </button>
+          <span class="top-divider"></span>
+          <button id="changes-button" class="button subtle">
+            <span data-icon="git-branch"></span
+            ><span id="change-count">No changes</span>
+          </button>
+          <button id="push-button" class="button primary">
+            <span data-icon="upload"></span> Push to GitHub
+          </button>
+        </div>
+      </header>
+      <div class="workspace">
+        <aside class="navigator" aria-label="Project navigation">
+          <div class="side-heading">
+            <span>YOUR SITE</span
+            ><button
+              id="new-page-button"
+              class="icon-button"
+              title="Add HTML page"
+              aria-label="Add HTML page"
+            >
+              <span data-icon="plus"></span>
+            </button>
+          </div>
+          <div id="file-list" class="file-list"></div>
+          <div class="side-heading outline-heading">
+            <span>LAYERS</span><span class="small-label">Click to select</span>
+          </div>
+          <div id="outline" class="outline" aria-label="Page elements"></div>
+          <div class="navigator-bottom">
+            <div class="local-label">
+              <span class="status-dot"></span> LOCAL WORKSPACE
+            </div>
+            <button id="connection-button" class="connection-button">
+              <span data-icon="github"></span
+              ><span id="connection-label">Connect a repository</span
+              ><span data-icon="arrow-up-right"></span>
+            </button>
+          </div>
+        </aside>
+        <main class="main-panel">
+          <div class="canvas-toolbar">
+            <div class="view-tabs" role="group" aria-label="Editor view">
+              <button class="active" id="visual-tab">
+                <span data-icon="cursor"></span>Visual</button
+              ><button id="code-tab"><span data-icon="code"></span>Code</button>
+            </div>
+            <div class="device-controls" role="group" aria-label="Canvas width">
+              <button
+                class="icon-button active"
+                data-device="desktop"
+                title="Desktop canvas"
+                aria-label="Desktop canvas"
+              >
+                <span data-icon="monitor"></span></button
+              ><button
+                class="icon-button"
+                data-device="tablet"
+                title="Tablet canvas"
+                aria-label="Tablet canvas"
+              >
+                <span data-icon="tablet"></span></button
+              ><button
+                class="icon-button"
+                data-device="mobile"
+                title="Mobile canvas"
+                aria-label="Mobile canvas"
+              >
+                <span data-icon="smartphone"></span>
+              </button>
+            </div>
+            <div class="history-controls">
+              <button
+                id="undo-button"
+                class="icon-button"
+                title="Undo (⌘Z)"
+                aria-label="Undo"
+                disabled
+              >
+                <span data-icon="undo"></span></button
+              ><button
+                id="redo-button"
+                class="icon-button"
+                title="Redo (⌘⇧Z)"
+                aria-label="Redo"
+                disabled
+              >
+                <span data-icon="redo"></span></button
+              ><span class="toolbar-divider"></span
+              ><button id="insert-button" class="button small">
+                <span data-icon="plus"></span> Insert
+              </button>
+            </div>
+          </div>
+          <div id="canvas-area" class="canvas-area">
+            <div class="canvas-label">
+              <span class="canvas-caption">YOUR CANVAS</span
+              ><span id="viewport-label">Desktop · responsive</span>
+            </div>
+            <div id="canvas-window" class="canvas-window">
+              <div class="browser-chrome">
+                <span class="window-dots"><i></i><i></i><i></i></span
+                ><span id="page-path">index.html</span
+                ><span data-icon="lock"></span>
+              </div>
+              <iframe
+                id="preview"
+                title="Site editing canvas"
+                sandbox="allow-scripts"
+                referrerpolicy="no-referrer"
+              ></iframe>
+            </div>
+            <div id="code-panel" class="code-panel" hidden>
+              <div class="code-header">
+                <span id="code-filename">index.html</span
+                ><button id="apply-code-button" class="button small primary">
+                  Apply code
+                </button>
+              </div>
+              <textarea
+                id="source-code"
+                spellcheck="false"
+                aria-label="HTML source code"
+              ></textarea>
+            </div>
+            <div class="canvas-hint">
+              <span data-icon="mouse"></span
+              ><span>Click to select. Double-click to edit text.</span
+              ><span class="hint-separator">/</span><span>Make it yours.</span>
+            </div>
+          </div>
+          <footer class="workspace-footer">
+            <div>
+              <span class="status-dot"></span
+              ><span id="footer-message"
+                >All changes stay on this device until you push.</span
+              >
+            </div>
+            <span
+              class="scripts-label"
+              title="Original scripts are preserved in exports but paused in the editing canvas."
+              ><span data-icon="shield"></span> Scripts paused in editor</span
+            >
+          </footer>
+        </main>
+        <aside id="inspector" class="inspector" aria-label="Element properties">
+          <div class="inspector-title">
+            <span>Design</span><span class="inspector-badge">ELEMENT</span>
+          </div>
+          <div id="empty-inspector" class="empty-inspector">
+            <div class="selection-illustration">
+              <span data-icon="cursor"></span
+              ><span class="selection-square"></span>
+            </div>
+            <h2>A little more you.</h2>
+            <p>
+              Select anything on the canvas to edit its text, color, spacing,
+              and style.
+            </p>
+            <span class="small-label">TIP: DOUBLE-CLICK TO TYPE</span>
+          </div>
+          <div id="code-inspector" class="empty-inspector" hidden>
+            <h2>Code is the canvas.</h2>
+            <p>
+              Edit the source, then choose Apply code. Switch to Visual to
+              select and style an element.
+            </p>
+          </div>
+          <div id="element-properties" hidden>
+            <div class="selected-element">
+              <span id="selected-tag" class="tag-label">h1</span
+              ><span id="selected-name">Heading</span>
+            </div>
+            <section class="property-section">
+              <div class="section-label">CONTENT</div>
+              <label id="text-field"
+                >Text<textarea id="element-text" rows="3"></textarea></label
+              ><label id="href-field" hidden
+                >Link URL<input
+                  id="element-href"
+                  type="text"
+                  placeholder="https://example.com" /></label
+              ><label id="src-field" hidden
+                >Image source<input
+                  id="element-src"
+                  type="text"
+                  placeholder="assets/image.jpg" /></label
+              ><label id="alt-field" hidden
+                >Image description<input
+                  id="element-alt"
+                  type="text"
+                  placeholder="Describe this image"
+              /></label>
+            </section>
+            <section class="property-section">
+              <div class="section-label">TYPOGRAPHY</div>
+              <label
+                >Font family<select id="font-family">
+                  <option value="">Original font</option>
+                  <option value="Arial, sans-serif">Arial</option>
+                  <option value="Georgia, serif">Georgia</option>
+                  <option value="system-ui, sans-serif">System</option>
+                  <option value="monospace">Monospace</option>
+                </select></label
+              >
+              <div class="field-row">
+                <label
+                  >Size
+                  <span class="input-unit"
+                    ><input
+                      id="font-size"
+                      type="number"
+                      min="1"
+                      max="500"
+                    /><span>px</span></span
+                  ></label
+                ><label
+                  >Weight<select id="font-weight">
+                    <option value="300">Light</option>
+                    <option value="400">Regular</option>
+                    <option value="500">Medium</option>
+                    <option value="600">Semibold</option>
+                    <option value="700">Bold</option>
+                    <option value="800">Extra bold</option>
+                  </select></label
+                >
+              </div>
+              <div class="field-row">
+                <label
+                  >Text color<span class="color-input"
+                    ><input id="text-color" type="color" value="#222222" /><span
+                      id="text-color-value"
+                      >#222222</span
+                    ></span
+                  ></label
+                ><label
+                  >Align<select id="text-align">
+                    <option value="left">Left</option>
+                    <option value="center">Center</option>
+                    <option value="right">Right</option>
+                    <option value="justify">Justify</option>
+                  </select></label
+                >
+              </div>
+            </section>
+            <section class="property-section">
+              <div class="section-label">APPEARANCE</div>
+              <label
+                >Background<span class="color-input"
+                  ><input
+                    id="background-color"
+                    type="color"
+                    value="#ffffff"
+                  /><span id="background-value">#FFFFFF</span
+                  ><button
+                    id="clear-background"
+                    class="tiny-button"
+                    title="Remove background override"
+                    type="button"
+                  >
+                    Reset
+                  </button></span
+                ></label
+              >
+              <div class="field-row">
+                <label
+                  >Padding<span class="input-unit"
+                    ><input
+                      id="element-padding"
+                      type="number"
+                      min="0"
+                      max="500"
+                    /><span>px</span></span
+                  ></label
+                ><label
+                  >Corner radius<span class="input-unit"
+                    ><input
+                      id="border-radius"
+                      type="number"
+                      min="0"
+                      max="500"
+                    /><span>px</span></span
+                  ></label
+                >
+              </div>
+            </section>
+            <div class="element-actions">
+              <button id="duplicate-button" class="button">
+                <span data-icon="copy"></span>Duplicate</button
+              ><button id="delete-button" class="button danger">
+                <span data-icon="trash"></span>Delete
+              </button>
+            </div>
+          </div>
+          <div class="inspector-bottom">
+            <span class="tiny-wordmark">CRAFTED BY YOU.</span
+            ><span data-icon="sparkle"></span>
+          </div>
+        </aside>
+      </div>
+    </div>
+    <dialog id="modal"><div id="modal-content"></div></dialog>
+    <div id="toast" class="toast" role="status" hidden></div>
+    <input id="folder-input" type="file" webkitdirectory multiple hidden />
+    <input id="html-input" type="file" accept=".html,.htm" hidden />
+  </body>
+</html>

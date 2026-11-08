@@ -1,0 +1,17 @@
+{
+  "name": "pagecraft",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A local visual HTML editor for AI-made sites, with GitHub publishing.",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node server.mjs",
+    "dev": "node --watch server.mjs",
+    "test": "node --test test/*.test.mjs",
+    "check": "node --check server.mjs && node --check public/app.js && node --check public/editor.js && node --check public/files.js"
+  },
+  "license": "MIT"
+}
