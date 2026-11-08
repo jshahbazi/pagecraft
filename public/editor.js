@@ -45,6 +45,11 @@ const MIME = {
   ttf: "font/ttf",
   otf: "font/otf",
 };
+const MAX_PREVIEW_CSS_UNITS = 128 * 1024 * 1024;
+const MAX_PREVIEW_CSS_OPERATIONS = 10_000;
+const MAX_PREVIEW_OUTPUT_UNITS = 128 * 1024 * 1024;
+
+class PreviewLimitError extends Error {}
 
 function randomId() {
   return crypto.randomUUID().replaceAll("-", "");
@@ -101,6 +106,10 @@ function safeRemote(value) {
 }
 function escapeScript(value) {
   return value.replace(/<\/script/gi, "<\\/script");
+}
+function escapeStyle(value) {
+  // A style element is an HTML raw-text context when srcdoc is reparsed.
+  return value.replace(/<\/style(?=[\s/>])/gi, (match) => `<\\/${match.slice(2)}`);
 }
 function serialize(document, doctype) {
   return `${doctype ? doctype + "\n" : ""}${document.documentElement.outerHTML}`;
@@ -439,6 +448,23 @@ export class Editor {
     );
   }
 
+  chargeCSS(units = 0) {
+    if (!this.cssBudget) return;
+    this.cssBudget.operations++;
+    this.cssBudget.units += units;
+    if (
+      this.cssBudget.operations > MAX_PREVIEW_CSS_OPERATIONS ||
+      this.cssBudget.units > MAX_PREVIEW_CSS_UNITS
+    )
+      throw new PreviewLimitError("The stylesheet is too complex to preview.");
+  }
+
+  chargePreviewOutput(units) {
+    this.previewUnits += units;
+    if (this.previewUnits > MAX_PREVIEW_OUTPUT_UNITS)
+      throw new PreviewLimitError("The site is too large to preview.");
+  }
+
   assetURL(reference, from = this.path, depth = 0) {
     if (!reference) return "about:blank";
     if (reference.startsWith("#")) return reference;
@@ -460,6 +486,7 @@ export class Editor {
         extension === "css"
           ? this.rewriteCSS(file.content, path, depth + 1)
           : file.content;
+      this.chargeCSS(content.length);
       encoded = encodeBase64(content);
     }
     // A sandbox without allow-same-origin has an opaque origin. Parent-created
@@ -470,25 +497,106 @@ export class Editor {
     return url;
   }
 
-  rewriteCSS(css, from, depth = 0) {
+  rewriteCSS(css, from, depth = 0, imports = new Set([from])) {
     if (depth > 8) return "";
+    const input = String(css);
+    this.chargeCSS(input.length);
     // Local imports are inlined, so nested url() paths resolve to their own file.
-    let result = String(css).replace(
-      /@import\s+(?:url\(\s*)?["']?([^"'\s;)]+)["']?\s*\)?[^;]*;/gi,
-      (_match, ref) => {
+    // Search for each terminating semicolon once. A regex that looks ahead to
+    // one from every unterminated @import can take quadratic time.
+    let result = "";
+    let cursor = 0;
+    const starts = /@import\s+/gi;
+    for (let start; (start = starts.exec(input)); ) {
+      const end = input.indexOf(";", start.index + start[0].length);
+      if (end < 0) break;
+      const directive = input.slice(start.index, end + 1);
+      const parsed = /^@import\s+(?:url\(\s*)?["']?([^"'\s;)]+)["']?\s*\)?[^;]*;$/i.exec(directive);
+      this.chargeCSS(directive.length);
+      result += input.slice(cursor, start.index);
+      if (parsed) {
+        const ref = parsed[1];
         const path = resolvePath(ref, from);
         const file =
           !/^(?:[a-z][a-z\d+.-]*:|\/\/)/i.test(ref) && this.files.get(path);
-        return file?.encoding === "utf8"
-          ? this.rewriteCSS(file.content, path, depth + 1)
-          : "";
-      },
-    );
-    result = result.replace(
-      /url\(\s*(?:"([^"]*)"|'([^']*)'|([^)]*))\s*\)/gi,
-      (_match, a, b, c) =>
-        `url("${this.assetURL((a ?? b ?? c).trim(), from, depth).replaceAll('"', "%22")}")`,
-    );
+        if (file?.encoding === "utf8" && !imports.has(path)) {
+          const expanded = this.rewriteCSS(
+            file.content,
+            path,
+            depth + 1,
+            new Set([...imports, path]),
+          );
+          this.chargeCSS(expanded.length);
+          result += expanded;
+        }
+      } else result += directive;
+      cursor = end + 1;
+      starts.lastIndex = cursor;
+    }
+    result += input.slice(cursor);
+    // Walk each URL once. A global regex can rescan the entire remaining
+    // stylesheet for every malformed url( with no closing quote or parenthesis.
+    const original = result;
+    result = "";
+    cursor = 0;
+    let inComment = false;
+    let inString = "";
+    for (let start = 0; start < original.length; ) {
+      if (inComment) {
+        if (original[start] === "*" && original[start + 1] === "/") {
+          inComment = false;
+          start += 2;
+        } else start++;
+        continue;
+      }
+      if (inString) {
+        if (original[start] === "\\") start += 2;
+        else if (original[start++] === inString) inString = "";
+        continue;
+      }
+      if (original[start] === "/" && original[start + 1] === "*") {
+        inComment = true;
+        start += 2;
+        continue;
+      }
+      if (original[start] === '"' || original[start] === "'") {
+        inString = original[start++];
+        continue;
+      }
+      if (original.slice(start, start + 4).toLowerCase() !== "url(") {
+        start++;
+        continue;
+      }
+      let index = start + 4;
+      while (/\s/.test(original[index] || "")) index++;
+      let reference;
+      if (original[index] === '"' || original[index] === "'") {
+        const quote = original[index++];
+        const valueStart = index;
+        while (index < original.length && original[index] !== quote) {
+          index += original[index] === "\\" ? 2 : 1;
+        }
+        if (index >= original.length) break;
+        reference = original.slice(valueStart, index++);
+        while (/\s/.test(original[index] || "")) index++;
+        if (original[index] !== ")") {
+          start = index;
+          continue;
+        }
+      } else {
+        const close = original.indexOf(")", index);
+        if (close < 0) break;
+        reference = original.slice(index, close);
+        index = close;
+      }
+      const url = this.assetURL(reference.trim(), from, depth).replaceAll('"', "%22");
+      this.chargeCSS(url.length + 7);
+      result += original.slice(cursor, start) + `url("${url}")`;
+      cursor = index + 1;
+      start = cursor;
+    }
+    result += original.slice(cursor);
+    this.chargeCSS(result.length);
     return result;
   }
 
@@ -497,6 +605,19 @@ export class Editor {
     this.activeEditingId = null;
     this.channel = randomId();
     const nonce = randomId();
+    this.cssBudget = { operations: 0, units: 0 };
+    this.previewUnits = 0;
+    try {
+      this.renderPreview(nonce);
+    } catch (error) {
+      if (!(error instanceof PreviewLimitError)) throw error;
+      this.iframe.srcdoc = '<!DOCTYPE html><html><body><p>The site is too large or complex to preview. You can edit it in Code view.</p></body></html>';
+    } finally {
+      this.cssBudget = null;
+    }
+  }
+
+  renderPreview(nonce) {
     const projection = this.document.cloneNode(true);
     const sourceNodes = [...this.document.querySelectorAll("*")];
     const projectedNodes = [...projection.querySelectorAll("*")];
@@ -521,7 +642,7 @@ export class Editor {
           element.removeAttribute(attribute.name);
       }
       if (
-        /^(SCRIPT|IFRAME|OBJECT|EMBED|BASE)$/.test(element.tagName) ||
+        /^(SCRIPT|IFRAME|OBJECT|EMBED|BASE|TEMPLATE)$/.test(element.tagName.toUpperCase()) ||
         (element.tagName === "META" && element.hasAttribute("http-equiv"))
       ) {
         element.remove();
@@ -536,22 +657,28 @@ export class Editor {
           const file = this.files.get(resolvePath(href, this.path));
           if (file?.encoding === "utf8") {
             const style = projection.createElement("style");
-            style.textContent = this.rewriteCSS(file.content, file.path);
+            style.textContent = escapeStyle(this.rewriteCSS(file.content, file.path));
+            this.chargePreviewOutput(style.textContent.length);
             element.replaceWith(style);
           } else element.remove();
         } else element.remove();
         continue;
       }
-      if (element.tagName === "STYLE")
-        element.textContent = this.rewriteCSS(element.textContent, this.path);
-      if (element.hasAttribute("style"))
-        element.setAttribute(
-          "style",
-          this.rewriteCSS(element.getAttribute("style"), this.path),
-        );
+      if (element.tagName.toUpperCase() === "STYLE") {
+        element.textContent = escapeStyle(this.rewriteCSS(element.textContent, this.path));
+        this.chargePreviewOutput(element.textContent.length);
+      }
+      if (element.hasAttribute("style")) {
+        const value = this.rewriteCSS(element.getAttribute("style"), this.path);
+        this.chargePreviewOutput(value.length);
+        element.setAttribute("style", value);
+      }
       for (const attr of ["src", "poster"])
-        if (element.hasAttribute(attr))
-          element.setAttribute(attr, this.assetURL(element.getAttribute(attr)));
+        if (element.hasAttribute(attr)) {
+          const value = this.assetURL(element.getAttribute(attr));
+          this.chargePreviewOutput(value.length);
+          element.setAttribute(attr, value);
+        }
       if (element.hasAttribute("srcset")) element.removeAttribute("srcset");
       if (element.tagName === "A" || element.tagName === "AREA") {
         element.setAttribute("href", "#");
@@ -560,11 +687,11 @@ export class Editor {
       }
       if (element.tagName === "USE" || element.tagName === "IMAGE") {
         for (const attr of ["href", "xlink:href"])
-          if (element.hasAttribute(attr))
-            element.setAttribute(
-              attr,
-              this.assetURL(element.getAttribute(attr)),
-            );
+          if (element.hasAttribute(attr)) {
+            const value = this.assetURL(element.getAttribute(attr));
+            this.chargePreviewOutput(value.length);
+            element.setAttribute(attr, value);
+          }
       }
     }
     const csp = projection.createElement("meta");

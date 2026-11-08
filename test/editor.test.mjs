@@ -340,3 +340,96 @@ test("restoring selection with scroll:false never scrolls the canvas", () => {
   parent.receive({ action: "ready" });
   assert.deepEqual(sent, { action: "select", id: "n1", scroll: false });
 });
+
+test("CSS imports keep relative assets and stop cycles without expanding them", () => {
+  const editor = Object.assign(Object.create(Editor.prototype), {
+    files: new Map([
+      ["css/a.css", { path: "css/a.css", content: '@import "a.css";p{color:red}', encoding: "utf8" }],
+      ["css/pixel.png", { path: "css/pixel.png", content: "AAEC", encoding: "base64" }],
+    ]),
+    urls: new Map(),
+    remoteOrigins: new Set(),
+    cssBudget: { operations: 0, units: 0 },
+  });
+  const output = editor.rewriteCSS('@import "a.css";i{background:url("pixel.png")}', "css/page.css");
+  assert.match(output, /p\{color:red\}/);
+  assert.match(output, /data:image\/png;base64,AAEC/);
+  assert.doesNotMatch(output, /@import/);
+  assert.ok(editor.cssBudget.operations < 20);
+  assert.match(editor.rewriteCSS('/* url(") */ p{background:url("pixel.png")}', "css/page.css"),
+    /p\{background:url\("data:image\/png;base64,AAEC"\)\}/);
+});
+
+test("branching imports show a bounded preview error without freezing the editor", () => {
+  const editor = Object.assign(Object.create(Editor.prototype), {
+    files: new Map([
+      ["a.css", { path: "a.css", content: '@import "b.css";'.repeat(100), encoding: "utf8" }],
+      ["b.css", { path: "b.css", content: '@import "c.css";'.repeat(100), encoding: "utf8" }],
+      ["c.css", { path: "c.css", content: "p{color:red}", encoding: "utf8" }],
+    ]),
+    urls: new Map(),
+    remoteOrigins: new Set(),
+    cssBudget: null,
+    document: {},
+    iframe: { srcdoc: "" },
+  });
+  editor.renderPreview = () => editor.rewriteCSS('@import "a.css";', "index.html");
+  editor.render();
+  assert.match(editor.iframe.srcdoc, /too large or complex to preview/);
+  assert.equal(editor.cssBudget, null);
+});
+
+test("unterminated import lines and ordinary multiline imports stay bounded", () => {
+  const editor = Object.assign(Object.create(Editor.prototype), {
+    files: new Map([["base.css", { path: "base.css", content: "p{color:blue}", encoding: "utf8" }]]),
+    urls: new Map(),
+    remoteOrigins: new Set(),
+    cssBudget: { operations: 0, units: 0 },
+  });
+  const unterminated = '@import "missing.css"\n'.repeat(5_000);
+  assert.equal(editor.rewriteCSS(unterminated, "index.html"), unterminated);
+  assert.ok(editor.cssBudget.operations < 5);
+  assert.match(editor.rewriteCSS('@import url("base.css")\n screen;', "index.html"), /p\{color:blue\}/);
+  assert.match(editor.rewriteCSS('/* "@import" */ @import "base.css";', "index.html"), /p\{color:blue\}/);
+});
+
+test("unterminated CSS urls do not rescan the remaining stylesheet", () => {
+  const editor = Object.assign(Object.create(Editor.prototype), {
+    files: new Map(),
+    urls: new Map(),
+    remoteOrigins: new Set(),
+    cssBudget: { operations: 0, units: 0 },
+  });
+  const unterminated = 'url("'.repeat(5_000);
+  assert.equal(editor.rewriteCSS(unterminated, "index.html"), unterminated);
+  assert.ok(editor.cssBudget.operations < 5);
+  assert.equal(editor.rewriteCSS('a{background:url("data:image/png;base64,AAEC")}', "index.html"),
+    'a{background:url("data:image/png;base64,AAEC")}');
+});
+
+test("an image used through nested CSS imports still fits the preview budget", () => {
+  const imageURL = `data:image/png;base64,${"A".repeat(11 * 1024 * 1024)}`;
+  const editor = Object.assign(Object.create(Editor.prototype), {
+    files: new Map([
+      ["a.css", { path: "a.css", content: '@import "b.css";', encoding: "utf8" }],
+      ["b.css", { path: "b.css", content: 'p{background:url("hero.png")}', encoding: "utf8" }],
+    ]),
+    assetURL: () => imageURL,
+    cssBudget: { operations: 0, units: 0 },
+  });
+  const output = editor.rewriteCSS('@import "a.css";', "index.html");
+  assert.match(output, /^p\{background:url\("data:image\/png;base64,/);
+  assert.ok(output.length > 11 * 1024 * 1024);
+});
+
+test("repeated binary assets cannot expand a small page into an unbounded preview", () => {
+  const editor = Object.assign(Object.create(Editor.prototype), {
+    document: {},
+    iframe: { srcdoc: "" },
+  });
+  editor.renderPreview = () => {
+    for (let i = 0; i < 200; i++) editor.chargePreviewOutput(1024 * 1024);
+  };
+  editor.render();
+  assert.match(editor.iframe.srcdoc, /too large or complex to preview/);
+});

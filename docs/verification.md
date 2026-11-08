@@ -4,7 +4,7 @@ Verified on 2026-11-08 with Node.js 24.15.0 on macOS, Chrome, and the in-app bro
 
 ## Automated checks
 
-`npm run check`, `npm test`, and `git diff --check` pass. The 81 Node tests cover:
+`npm run check`, `npm test`, and `git diff --check` pass. The 87 Node tests cover:
 
 - Local host, origin, token, request-size, and static file boundaries.
 - Directory reads, source-folder detection, relative paths, symbolic links, file counts, and byte limits.
@@ -16,6 +16,7 @@ Verified on 2026-11-08 with Node.js 24.15.0 on macOS, Chrome, and the in-app bro
 - Native OS picker commands, cancellation, concurrency, and errors using injected command runners.
 - GitHub identifier validation, unique clone directories, sparse checkout, and Git upstream preservation. A real temporary Git clone checks sparse contents and upstream metadata.
 - Production editor behavior: selected-element keyboard deletion outside inline editing, native text deletion, no iframe reload on blur, stable IDs for new inline nodes, and selection restoration without scrolling.
+- Preview limits for cyclic and branching CSS imports, malformed import lines and URLs, normal nested CSS assets, and repeated binary asset references.
 - ZIP contents and CRC/directory output, plus the retained GitHub API adapter.
 
 GitHub API tests use an injected transport. OS dialog command tests use an injected runner. Git commit/push tests use actual temporary local repositories.
@@ -47,6 +48,12 @@ Chrome end-to-end checks on an isolated local fixture passed:
 - Inline typing and Backspace changed characters normally. On blur the iframe srcdoc stayed unchanged and scrollTop stayed at 1824.
 
 The QA shell used an integer label line height to avoid the browser automation tool's fractional iframe-coordinate restriction. Production editor and history code were unchanged by that layout workaround. No user site files were saved during these checks.
+
+## Security recheck
+
+An independent security scan found three preview issues in the original revision: imported CSS could break out of a serialized style element and redirect the iframe, branching CSS imports could exhaust the parent page, and repeated binary asset references could inflate the generated preview. The fixes escape closing style tags before serialization and bound CSS expansion and generated preview output. Oversized previews show a short fallback message and remain editable in Code view.
+
+In an isolated Chrome fixture, the original CSS payload navigated the iframe once and caused one forged edit to be accepted. After the fix, the same payload, a nested inline-style variant, and a mixed-case closing tag produced no attacker request or forged edit. Ten references to a 1 MiB image rendered normally; 200 references showed the bounded fallback. The complete 87-test suite passed after these changes, including editor keyboard, inline editing, directory, clone, and local Git push tests. Browser editing and Git push were not rerun as one combined end-to-end sequence after the security patch.
 
 ## Recovery limits
 
